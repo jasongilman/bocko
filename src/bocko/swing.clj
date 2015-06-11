@@ -2,16 +2,16 @@
   (:import (java.awt Dimension Color)
            (javax.swing JPanel JFrame)))
 
-(defn- rgb->color
+(defn- rgb-to-color
   [[r g b]]
   (Color. r g b))
 
 (defn make-panel
   [color-map raster width height pixel-width pixel-height]
   (let [frame (JFrame. "Bocko")
-        rgb->color (memoize rgb->color)
+        rgb-to-color (memoize rgb-to-color)
         paint-point (fn [x y c g]
-                      (.setColor g (rgb->color (c color-map)))
+                      (.setColor g (rgb-to-color (c color-map)))
                       (.fillRect g
                         (* x pixel-width) (* y pixel-height)
                         pixel-width pixel-height))
@@ -34,4 +34,4 @@
       (fn [_ _ o n]
         (when (not= o n)
           (.repaint panel))))
-    panel))
+    frame))

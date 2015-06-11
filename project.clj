@@ -1,6 +1,6 @@
-(defproject bocko "0.3.0"
+(defproject bocko "0.3.0-jason"
   :description "Simple imperative graphics"
   :url "https://github.com/mfikes/bocko"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
-  :dependencies [[org.clojure/clojure "1.7.0-beta3"]])
+  :dependencies [[org.clojure/clojure "1.7.0-RC1"]])

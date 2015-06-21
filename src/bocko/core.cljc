@@ -44,12 +44,23 @@
                 pixel-height
                 clear-color
                 default-color]} view
-        clear-screen (vec (repeat height (vec (repeat width clear-color))))
-        raster (atom clear-screen)]
+        clear-screen (vec (repeat width (vec (repeat height clear-color))))
+        raster clear-screen
+        raster-atom (atom raster)]
     (assoc view
            :clear-screen clear-screen
+           ;; Defines a matrix of vectors. Purely functional changes can be made to the view and update
+           ;; this raster then applied to the raster atom to actually display them.
            :raster raster
-           :canvas (@create-canvas-fn color-map raster width height pixel-width pixel-height))))
+           ;; The raster atom contains the mutable raster that's being displayed. 
+           :raster-atom raster-atom
+           :canvas (@create-canvas-fn color-map raster-atom width height pixel-width pixel-height))))
+
+(defn apply-raster!
+  "Applies the raster changes to the raster atom and causes the display to be updated."
+  [{:keys [raster raster-atom] :as view}]
+  (reset! raster-atom raster)
+  view)
 
 (defn close-view
   [{:keys [canvas]}]
@@ -58,16 +69,15 @@
 ;; If we are in Clojure, set up a Swing canvas
 #?(:clj
     (set-create-canvas
-      (fn [color-map raster width height pixel-width pixel-height]
+      (fn [color-map raster-atom width height pixel-width pixel-height]
         (require 'bocko.swing)
         (let [make-panel (eval 'bocko.swing/make-panel)]
-          (make-panel color-map raster width height pixel-width pixel-height)))))
+          (make-panel color-map raster-atom width height pixel-width pixel-height)))))
 
 (defn clear
-  "Clears this screen."
-  [{:keys [raster clear-screen]}]
-  (reset! raster clear-screen)
-  nil)
+  "Clears the raster of the view and returns the updated view."
+  [{:keys [clear-screen] :as view}]
+  (assoc view :raster clear-screen))
 
 (defn color
   "Sets the color for plotting.
@@ -94,10 +104,9 @@
   "Plots a point at a given x and y.
   
   Both x and y must be between 0 and 39."
-  [{:keys [raster height width default-color]} x y]
+  [{:keys [height width default-color] :as view} x y]
   {:pre [(integer? x) (integer? y) (<= 0 x (dec width)) (<= 0 y (dec height))]}
-  (swap! raster plot* x y default-color)
-  nil)
+  (update-in view [:raster] plot* x y default-color))
 
 (defn- lin
   [r a1 a2 b c f]
@@ -116,15 +125,14 @@
   "Plots a horizontal line from x1 to x2 at a given y.
   
   The x and y numbers must be between 0 and 39."
-  [{:keys [raster height width default-color]} x1 x2 y]
+  [{:keys [height width default-color] :as view} x1 x2 y]
   {:pre [(integer? x1) 
          (integer? x2)
          (integer? y)
          (<= 0 x1 (dec width))
          (<= 0 x2 (dec width))
          (<= 0 y (dec height))]}
-  (swap! raster hlin* x1 x2 y default-color)
-  nil)
+  (update-in view [:raster] hlin* x1 x2 y default-color))
 
 (defn- vlin*
   [r y1 y2 x c]
@@ -134,15 +142,14 @@
   "Plots a vertical line from y1 to y2 at a given x.
   
   The x and y numbers must be between 0 and 39."
-  [{:keys [raster height width default-color]} y1 y2 x]
+  [{:keys [height width default-color] :as view} y1 y2 x]
   {:pre [(integer? y1) 
          (integer? y2) 
          (integer? x) 
          (<= 0 y1 (dec height)) 
          (<= 0 y2 (dec height)) 
          (<= 0 x (dec width))]}
-  (swap! raster vlin* y1 y2 x default-color)
-  nil)
+  (update-in view [:raster] vlin* y1 y2 x default-color))
 
 (defn- scrn*
   [r x y]
@@ -154,4 +161,4 @@
   Both x and y must be between 0 and 39."
   [{:keys [raster height width default-color]} x y]
   {:pre [(integer? x) (integer? y) (<= 0 x (dec width)) (<= 0 y (dec height))]}
-  (scrn* @raster x y))
+  (scrn* raster x y))

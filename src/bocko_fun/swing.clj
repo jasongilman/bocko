@@ -1,4 +1,4 @@
-(ns bocko.swing
+(ns bocko-fun.swing
   (:import (java.awt Dimension Color)
            (javax.swing JPanel JFrame)))
 

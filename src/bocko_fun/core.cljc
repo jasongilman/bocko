@@ -1,4 +1,4 @@
-(ns bocko.core)
+(ns bocko-fun.core)
 
 (def ^:private color-map
   {:black       [0 0 0]
@@ -27,7 +27,8 @@
   [f]
   (reset! create-canvas-fn f))
 
-(def create-canvas-defaults
+(def view-defaults
+  "Default options when creating a view."
   {:width 40
    :height 40
    :pixel-width 28
@@ -36,25 +37,33 @@
    :default-color :white})
 
 (defn create-view
-  [options]
-  (let [view (merge create-canvas-defaults options)
-        {:keys [width
-                height
-                pixel-width
-                pixel-height
-                clear-color
-                default-color]} view
-        clear-screen (vec (repeat width (vec (repeat height clear-color))))
-        raster clear-screen
-        raster-atom (atom raster)]
-    (assoc view
-           :clear-screen clear-screen
-           ;; Defines a matrix of vectors. Purely functional changes can be made to the view and update
-           ;; this raster then applied to the raster atom to actually display them.
-           :raster raster
-           ;; The raster atom contains the mutable raster that's being displayed. 
-           :raster-atom raster-atom
-           :canvas (@create-canvas-fn color-map raster-atom width height pixel-width pixel-height))))
+  "Creates a new view. A view represents the area on which bock-fun will draw. It contains both an 
+  immutable representation of the view in the :raster key and a mutable representation of the view
+  in the :raster-atom and :canvas keys. Public functions in this namespace create new instances
+  of the view that modify the :raster value. The apply-raster! function will mutate the :raster-atom
+  by applying the :raster value to it. The canvas which watches the raster-atom will automatically
+  update its own view."
+  ([]
+   (create-view nil))
+  ([options]
+   (let [view (merge view-defaults options)
+         {:keys [width
+                 height
+                 pixel-width
+                 pixel-height
+                 clear-color
+                 default-color]} view
+         clear-screen (vec (repeat width (vec (repeat height clear-color))))
+         raster clear-screen
+         raster-atom (atom raster)]
+     (assoc view
+            :clear-screen clear-screen
+            ;; Defines a matrix of vectors. Purely functional changes can be made to the view and update
+            ;; this raster then applied to the raster atom to actually display them.
+            :raster raster
+            ;; The raster atom contains the mutable raster that's being displayed. 
+            :raster-atom raster-atom
+            :canvas (@create-canvas-fn color-map raster-atom width height pixel-width pixel-height)))))
 
 (defn apply-raster!
   "Applies the raster changes to the raster atom and causes the display to be updated."
@@ -63,6 +72,7 @@
   view)
 
 (defn close-view
+  "Closes the view"
   [{:keys [canvas]}]
   (.dispatchEvent canvas (java.awt.event.WindowEvent. canvas java.awt.event.WindowEvent/WINDOW_CLOSING)))
 
@@ -70,8 +80,8 @@
 #?(:clj
     (set-create-canvas
       (fn [color-map raster-atom width height pixel-width pixel-height]
-        (require 'bocko.swing)
-        (let [make-panel (eval 'bocko.swing/make-panel)]
+        (require 'bocko-fun.swing)
+        (let [make-panel (eval 'bocko-fun.swing/make-panel)]
           (make-panel color-map raster-atom width height pixel-width pixel-height)))))
 
 (defn clear

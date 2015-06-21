@@ -1,255 +1,149 @@
-# Bocko
+# Bocko Fun(ctional)
 
-A small library making it extremely simple to play around with low-res graphics from Clojure, as well as from ClojureScript on [iOS](https://github.com/mfikes/bocko-ios), [Android](https://github.com/nvbn/bocko-android)<sup>[1](#bockoandroid)</sup>, and an [HTML canvas](https://github.com/mfikes/bocko-canvas). ([Read the blog post.](http://blog.fikesfarm.com/posts/2015-05-24-bocko-low-res-clojure-graphics.html))
+A forked version of [Bocko](https://github.com/mfikes/bocko). It provides a slightly more functional API. 
 
-<img src="bocko.jpg" width="400px" hspace="5px"/>
+## Caveats
+
+This version will likely not be maintained in the future. I encourage you to use the original library. 
+
+Tested with Clojure 1.7.0-RC1. Requires Clojure 1.7.0 or greater. The original Bocko is Clojurescript compatible. That capability has not been tested with Bock Fun.
 
 # Usage
 
-```
-lein new bocko my-project
-```
+Add bocko-fun to your project dependencies.
 
-Then find a short `README.md` at the top-level of the generated project, explaining how to get up and running.
+```
+[bocko-fun "0.3.0"]
+```
 
 # Detailed Usage
 
+The view is immediately visible after it is created.
+
 ```clojure
-(require '[bocko.core :refer :all])
+(require '[bocko-fun.core :as b])
 
-(plot 2 3)      ;; plots a point on the screen
+(def view (b/create-view
+            ;; All of these are optional.
+            ;; These are the default values if not specified.
+            {:width 40
+             :height 40
+             :pixel-width 28
+             :pixel-height 16
+             :clear-color :black
+             :default-color :white}))
+```             
 
-(color :pink)   ;; changes the color to pink
-(plot 5 5)
+The view contains the keys: 
 
-(scrn 5 5)      ;; => :pink
+* `:clear-screen` - contains a copy of a raster as a blank screen.
+* `:raster` - The immutable raster that's modified when the view is manipulated.
+* `:raster-atom` - A mutable reference to the currently displayed raster.
+* `:canvas` - A Swing JFrame that displays what's in the raster-atom. It watches the raster atom for changes and applies them as the raster atom is updated.
 
-(hlin 3 9 10)   ;; draws a horizontal line
 
-(clear)         ;; clears screen
+Rasters are matrices (vector of vectors) representing the displayed screen. The matrix is a vector of columns where each column is a vector containing keywords representing the displayed color in a square.
+
+Functions that manipulate the view take the view as an argument. The updated view is returned.
+
+```clojure
+;; Draws a point at 1,2
+(def updated-view (b/plot view 1 2))
 ```
 
-The commands comprise `color`, `plot`, `scrn`, `hlin`, `vlin`, and `clear`.
+Changes to a view create a new immutable version of the view
 
-# Demo
+```clojure
+(not= updated-view view)
+```
 
-Watch a demo to see it in action:
+Changes are not visible until they are applied to the underlying mutable raster atom and canvas.
 
-[![Bocko Demo](http://img.youtube.com/vi/piJPrP3BKIk/0.jpg)](http://www.youtube.com/watch?v=piJPrP3BKIk "Bocko Clojure simple graphics")
+```clojure
+(b/apply-raster! updated-view)
+```
+
+
+```clojure
+(-> view
+    
+    ;; plots a point on the screen
+    (b/plot 2 3)
+
+    ;; changes the color to pink
+    (b/color :pink)
+    (b/plot 5 5)
+    
+    ;; draws a horizontal line
+    (b/hlin 3 9 10)
+    
+    ;; Mutation!: Applies the view changes to the display
+    b/apply-raster!)
+  
+  
+;; Close the view
+(b/close-view view)
+```
+
+The commands comprise `create-view`, `apply-raster!`, `close-view`, `color`, `plot`, `scrn`, `hlin`, `vlin`, and `clear`.
 
 # Examples
 
 Draw an American flag:
 ```clojure
-;; Draw 13 stripes cycling over red/white
+(require '[bocko-fun.core :as b])
 
-(doseq [[n c] (take 13 
-                (map vector (range) (cycle [:red :white])))] 
-  (color c)
-  (let [x1 10 
-        x2 25 
-        y (+ 10 n)]
-    (hlin x1 x2 y)))
+(def view (b/create-view))
 
-;; Fill in a dark blue field in the corner
-
-(color :dark-blue)
-(doseq [x (range 10 19)
-        y (range 10 17)]
-  (plot x y))
-
-;; Add some stars to the field by skipping by 2
-
-(color :white)
-(doseq [x (range 11 19 2)
-        y (range 11 17 2)]
-  (plot x y))
+(let [;; Draw 13 stripes cycling over red/white
+      view-with-stripes (reduce (fn [view [n c]]
+                                  (-> view
+                                      (b/color c)
+                                      (b/hlin 10 25 (+ 10 n))))
+                                view
+                                (take 13 
+                                      (map vector (range) (cycle [:red :white]))))
+      ;; Fill in a dark blue field in the corner
+      view-with-dark-blue-field (reduce #(apply b/plot %1 %2)
+                                        (b/color view-with-stripes :dark-blue)
+                                        (for [x (range 10 19)
+                                              y (range 10 17)]
+                                          [x y]))
+      ;; Add some stars to the field by skipping by 2
+      flag-view (reduce #(apply b/plot %1 %2)
+                        (b/color view-with-dark-blue-field :white)
+                        (for [x (range 11 19 2)
+                              y (range 11 17 2)]
+                          [x y]))]
+  
+  (b/apply-raster! flag-view))
 ```
-
-Display all the colors:
-
-```clojure
-(doseq [[c n] (map vector
-                   [:black        :red        :dark-blue    :purple
-                    :dark-green   :dark-gray  :medium-blue  :light-blue
-                    :brown        :orange     :light-gray   :pink
-                    :light-green  :yellow     :aqua         :white]
-                   (range))]
-  (color c)
-  (let [x' (* 10 (rem n 4))
-        y' (* 10 (quot n 4))]
-    (doseq [x (range x' (+ 10 x'))
-            y (range y' (+ 10 y'))]
-      (plot x y))))
-```
-
 
 Animated bouncing ball using `loop`/`recur`:
 ```clojure
-(loop [x 5 y 23 vx 1 vy 1]
+(require '[bocko-fun.core :as b])
+  
+(loop [view (b/create-view) x 5 y 23 vx 1 vy 1]
   ; First determine new location and velocity,
   ; reversing direction if bouncing off edge.
   (let [x' (+ x vx)
         y' (+ y vy)
         vx' (if (< 0 x' 39) vx (- vx))
-        vy' (if (< 0 y' 39) vy (- vy))]
-    ; Erase drawing at previous location
-    (color :black)
-    (plot x y)
-    ; Draw ball in new location
-    (color :dark-blue)
-    (plot x' y')
+        vy' (if (< 0 y' 39) vy (- vy))
+        updated-view (-> view
+                         ; Erase drawing at previous location
+                         (b/color :black)
+                         (b/plot x y)
+                         ; Draw ball in new location
+                         (b/color :dark-blue)
+                         (b/plot x' y')
+                         b/apply-raster!)]
+    
     ; Sleep a little and then loop around again
     (Thread/sleep 50)
-    (recur x' y' vx' vy')))
+    (recur updated-view x' y' vx' vy')))
 ```
-
-Random colors and locations:
-```clojure
-(loop []
-  (let [c (rand-nth [:black        :red        :dark-blue    :purple
-                     :dark-green   :dark-gray  :medium-blue  :light-blue
-                     :brown        :orange     :light-gray   :pink
-                     :light-green  :yellow     :aqua         :white])
-        x (rand-int 40)
-        y (rand-int 40)]
-    (color c)
-    (plot x y)
-    (Thread/sleep 1)
-    (recur)))
-```
-
-Game-of-Life Glider:   (Credit: [Christophe Grand](http://clj-me.cgrand.net/2011/08/19/conways-game-of-life/))
-```
-(defn neighbours [[x y]]
-  (for [dx [-1 0 1] dy (if (zero? dx) [-1 1] [-1 0 1])]
-    [(+ dx x) (+ dy y)]))
-
-(defn step [cells]
-  (set (for [[loc n] (frequencies (mapcat neighbours cells))
-             :when (or (= n 3) (and (= n 2) (cells loc)))]
-         loc)))
-
-(loop [board #{[0 2] [1 0] [1 2] [2 1] [2 2]}]
-  (clear)
-  (run! (partial apply plot) board)
-  (Thread/sleep 100)
-  (recur (step board)))
-```
-
-# Multi-threading
-
-You can use Bocko from multiple threads. The underlying canvas is thread-safe.
-
-In that scenario, establishing thread-local bindings for the `*color*` dynamic var will allow each thread to plot independently. For example, the following code will not interfere with the color being used for plotting in other threads:
-
-```clojure
-(future
-  (binding [*color* :orange]
-    (plot 3 3)                ; Will plot an orange point
-    (set! *color* :aqua)
-    (plot 4 4)))              ; Will plot an aqua point
-```
-
-In fact, a form like `(color :red)` is just a simple wrapper that will set a thread-local binding if one is in effect, otherwise it will set the root binding.
-
-Here is an example. This makes use of thread-local bindings and "does the right thing":
-
-```clojure
-(do
-
-  ;; Repeatedly display all the colors
-
-  (future
-    (loop []
-      (clear)
-      (doseq [[c n] (map vector
-                      [:black :red :dark-blue :purple
-                       :dark-green :dark-gray :medium-blue :light-blue
-                       :brown :orange :light-gray :pink
-                       :light-green :yellow :aqua :white]
-                      (range))]
-        (binding [*color* c]
-          (let [x' (* 10 (rem n 4))
-                y' (* 10 (quot n 4))]
-            (doseq [x (range x' (+ 10 x'))
-                    y (range y' (+ 10 y'))]
-              (plot x y)
-              (Thread/sleep 1)))))
-      (recur)))
-
-  ;; Add a bouncing ball
-
-  (future
-    (loop [x 5 y 23 vx 1 vy 1]
-      ; First determine new location and velocity,
-      ; reversing direction if bouncing off edge.
-      (let [x' (+ x vx)
-            y' (+ y vy)
-            vx' (if (< 0 x' 39) vx (- vx))
-            vy' (if (< 0 y' 39) vy (- vy))]
-        ; Erase drawing at previous location
-        (binding [*color* :black]
-          (plot x y))
-        ; Draw ball in new location
-        (binding [*color* :dark-blue]
-          (plot x' y'))
-        ; Sleep a little and then loop around again
-        (Thread/sleep 50)
-        (recur x' y' vx' vy')))))
-```
-
-This, on the other hand, illustrates contention / interference with the color being used for plotting:
-
-```clojure
-(do
-
-  ;; Repeatedly display all the colors
-
-  (future
-    (loop []
-      (clear)
-      (doseq [[c n] (map vector
-                      [:black :red :dark-blue :purple
-                       :dark-green :dark-gray :medium-blue :light-blue
-                       :brown :orange :light-gray :pink
-                       :light-green :yellow :aqua :white]
-                      (range))]
-        (color c)
-        (let [x' (* 10 (rem n 4))
-              y' (* 10 (quot n 4))]
-          (doseq [x (range x' (+ 10 x'))
-                  y (range y' (+ 10 y'))]
-            (plot x y)
-            (Thread/sleep 1))))
-      (recur)))
-
-  ;; Add a bouncing ball
-
-  (future
-    (loop [x 5 y 23 vx 1 vy 1]
-      ; First determine new location and velocity,
-      ; reversing direction if bouncing off edge.
-      (let [x' (+ x vx)
-            y' (+ y vy)
-            vx' (if (< 0 x' 39) vx (- vx))
-            vy' (if (< 0 y' 39) vy (- vy))]
-        ; Erase drawing at previous location
-        (color :black)
-        (plot x y)
-        ; Draw ball in new location
-        (color :dark-blue)
-        (plot x' y')
-        ; Sleep a little and then loop around again
-        (Thread/sleep 50)
-        (recur x' y' vx' vy')))))
-```
-
 
 # License
 
 Distributed under the Eclipse Public License, which is also used by Clojure.
-
-# Footnotes
-
-<a name="bockoandroid">1</a>: Bocko for Android is by [Vladimir Iakovlev](https://github.com/nvbn).
